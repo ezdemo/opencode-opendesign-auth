@@ -23,7 +23,10 @@ function number(v) {
   const n = Number(v)
   return Number.isFinite(n) ? n : undefined
 }
-const amount = (v) => number(v) === undefined ? undefined : String(number(v))
+const usdFormat = new Intl.NumberFormat("en-US", {
+  style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4, useGrouping: false,
+})
+const usd = (n) => usdFormat.format(n)
 
 function time(v) {
   const n = number(v)
@@ -102,13 +105,15 @@ async function models(a, fetchImpl = fetch) {
   return Object.fromEntries(rows.map((m) => [m.id, runtimeModel(m)]))
 }
 
-function planWindows(b) {
+function planWindows(b, creditsPerUsd) {
   const cp = b?.codingPlan
   if (!object(cp) || !Array.isArray(cp.windows)) throw new Error("OpenDesign: invalid Coding Plan response")
   if (!cp.windows.length) {
     if (cp.eligible === false) return []
     throw new Error("OpenDesign: Coding Plan windows unavailable")
   }
+  const rate = number(creditsPerUsd)
+  if (!(rate > 0)) throw new Error("OpenDesign: Coding Plan USD conversion unavailable (creditsPerUsd missing or invalid)")
   return cp.windows.map((w) => {
     const used = number(w.usedCredits), limit = number(w.limitCredits), remaining = number(w.remainingCredits)
     const duration = number(w.durationSeconds), resetsAt = time(w.resetsAt)
@@ -117,7 +122,7 @@ function planWindows(b) {
     const name = duration % 86400 === 0 ? `${duration / 86400} days` : duration % 3600 === 0 ? `${duration / 3600} hours` : `${duration} seconds`
     return {
       name, used: used / limit * 100, span: duration, resetsAt,
-      display: `${used} / ${limit} credits · ${remaining} remaining`,
+      display: `${usd(used / rate)} / ${usd(limit / rate)} · ${usd(remaining / rate)} remaining`,
     }
   })
 }
@@ -146,12 +151,13 @@ async function preflight(workspaceId, options = {}, execImpl = exec) {
   let b
   try { b = JSON.parse(stdout) } catch { throw new Error("OpenDesign: invalid Vela preflight JSON") }
   if (b?.workspaceId !== workspaceId) throw new Error("OpenDesign: Vela returned a different workspace")
-  return planWindows(b)
+  if (!object(b.codingPlan) || !Array.isArray(b.codingPlan.windows)) throw new Error("OpenDesign: invalid Coding Plan response")
+  return b
 }
 
 async function usage(a, options = {}, { fetchImpl = fetch, preflightImpl = preflight, readProfileImpl = readProfile } = {}) {
   const { controlKey, runtimeKey } = credentials(a)
-  const out = { signIn: "kept" }, errors = [], windows = [], balance = []
+  const out = { signIn: "kept" }, errors = [], windows = []
   const workspaceId = firstString(a.metadata?.workspaceId, options.workspaceId, process.env.OPENDESIGN_WORKSPACE_ID)
   const tasks = [
     json(API + "/wallet/balance", controlKey, "wallet", fetchImpl),
@@ -170,28 +176,23 @@ async function usage(a, options = {}, { fetchImpl = fetch, preflightImpl = prefl
   if (wallet.status === "fulfilled") {
     const n = number(wallet.value.balanceUsd)
     if (n === undefined) errors.push("OpenDesign: wallet balance unavailable")
-    else balance.push(`$${n.toFixed(4)}`)
+    else out.balance = usd(n)
   } else errors.push(wallet.reason.message)
   if (billing.status === "fulfilled") {
     const b = billing.value, tier = firstString(b.membershipTier), status = firstString(b.subscriptionStatus)
     if (tier) out.plan = status ? `${tier} (${status})` : tier
     else errors.push("OpenDesign: membership tier unavailable")
     if (!status) errors.push("OpenDesign: subscription status unavailable")
-    for (const [field, name] of [["subscriptionCredits", "Subscription credits"], ["rechargeCredits", "Recharge credits"]]) {
-      const value = amount(b.balances?.[field])
-      if (value === undefined) errors.push(`OpenDesign: ${name.toLowerCase()} unavailable`)
-      // Magpie treats a window without `used` as 0% used. A credit balance
-      // has no known total, so it must not be displayed as a quota window.
-      else balance.push(`${name}: ${value}`)
-    }
     const until = time(b.subscriptionCurrentPeriodEnd)
     if (until) out.until = until
     if (typeof b.subscriptionCancelAtPeriodEnd === "boolean") out.renew = b.subscriptionCancelAtPeriodEnd ? "off" : "auto"
   } else errors.push(billing.reason.message)
-  if (coding?.status === "fulfilled") windows.push(...coding.value)
+  if (coding?.status === "fulfilled") {
+    try { windows.push(...planWindows(coding.value, billing.status === "fulfilled" ? billing.value.creditsPerUsd : undefined)) }
+    catch (e) { errors.push(e.message) }
+  }
   else if (coding) errors.push(coding.reason.message)
   else errors.push("OpenDesign: Coding Plan not queried; set workspaceId in plugin options or import the sign-in with a workspace ID")
-  if (balance.length) out.balance = balance.join(" · ")
   if (windows.length) out.windows = windows
   if (errors.length) out.error = errors.join("; ")
   return out
@@ -270,4 +271,4 @@ export async function OpenDesignAuthPlugin(_input, options = {}) {
   }
 }
 
-export const _internal = { number, time, readProfile, credentials, json, runtimeModel, models, planWindows, preflight, usage, inference, redact }
+export const _internal = { number, usd, time, readProfile, credentials, json, runtimeModel, models, planWindows, preflight, usage, inference, redact }

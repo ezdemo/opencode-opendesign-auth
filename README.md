@@ -10,7 +10,7 @@
 
 ## 中文
 
-在 Magpie / OpenCode 中使用你的 OpenDesign 账号，发现可用模型，并在 Magpie 中查询美元余额、积分和 Coding Plan 周期额度。Provider ID 为 `opendesign`。
+在 Magpie / OpenCode 中使用你的 OpenDesign 账号，发现可用模型，并在 Magpie 中查询统一美元余额和 Coding Plan 周期额度。Provider ID 为 `opendesign`。
 
 > 本项目由社区独立维护，**不是 OpenDesign 或 Magpie 官方插件**，不隶属于其团队，也未获得其官方背书。问题请提交到[本仓库 Issues](https://github.com/ezdemo/opencode-opendesign-auth/issues)。
 
@@ -19,7 +19,7 @@
 - 从本地 `~/.amr/config.json` 的 `profiles.prod` 只读导入登录信息。
 - 动态获取账号可用的模型，读取上下文长度与输入能力，过滤禁用模型。
 - 使用 OpenAI Chat Completions 协议，转发普通请求、流式请求与工具调用参数。
-- 在 Magpie 中分别查看钱包、订阅积分、充值积分及 Coding Plan 周期的已用、剩余、上限和重置时间。
+- 在 Magpie 中查看统一美元余额，以及换算为美元的 Coding Plan 已用、剩余、上限和重置时间。
 - 将 OpenDesign 官网 PNG 图标内嵌到插件中，作为 Magpie 提供商图标，加载时无需下载图标。
 
 ### 安装与登录
@@ -79,17 +79,17 @@ Windows 自动查找桌面端自带的 `%LOCALAPPDATA%/Programs/Open Design/reso
 | 模型列表 | `GET https://amr-link.open-design.ai/v1/models` | `runtimeKey` |
 | AI 调用 | `POST https://amr-link.open-design.ai/v1/chat/completions` | `runtimeKey`；`model`、`messages`、`stream` |
 | 钱包余额 | `GET https://amr-api.open-design.ai/api/v1/wallet/balance` | `controlKey`；`balanceUsd` |
-| 账单摘要 | `GET https://amr-api.open-design.ai/api/v1/billing/summary` | `controlKey`；`membershipTier`、`subscriptionStatus`、`balances` |
+| 账单摘要 | `GET https://amr-api.open-design.ai/api/v1/billing/summary` | `controlKey`；`membershipTier`、`subscriptionStatus`、`creditsPerUsd` |
 | 周期额度 | `vela billing preflight --workspace-id <id> --format json` | CLI 本地登录；`codingPlan.windows[]` |
 
 两类 API Key 均通过 `Authorization: Bearer <key>` 使用，职责分别对应运行时和账户查询。
 
-**钱包和积分是余额，不是百分比。** 只有真实的 Coding Plan 周期形成额度窗口。例如：
+**余额行仅显示统一美元余额，不再区分订阅与充值积分。** Coding Plan 的已用、上限和剩余积分按账单接口返回的 `creditsPerUsd` 换算成美元；比例缺失或无效时明确报错，不猜测汇率。金额至少保留两位小数，必要时保留四位。只有真实周期形成百分比窗口。例如，接口返回 10,000 积分 / 美元时：
 
 | 周期 | 已用 / 上限 | 剩余 | 显示的剩余百分比 |
 | --- | --- | --- | --- |
-| 5 小时 | 0 / 50,000 积分 | 50,000 积分 | 100% |
-| 7 天 | 150,445 / 150,000 积分 | 0 积分 | 0% |
+| 5 小时 | $0.00 / $5.00 | $5.00 | 100% |
+| 7 天 | $15.0445 / $15.00 | $0.00 | 0% |
 
 上表为示例，不代表任何账号的当前额度。超额使用保留超过 100% 的已用比例；钱包为零不等于周期用尽。查询失败、数据缺失或未配置工作区不会换算成零。部分查询失败时保留成功字段，Magpie 可能用错误信息替代周期行。真实周期窗口参与 Magpie 的周期额度判断。
 
@@ -109,7 +109,7 @@ bun run check
 bun test
 ```
 
-18 项单元测试使用模拟凭据和临时配置，覆盖认证隔离、余额/周期解析、失败不显示为零、流式转发、取消信号、工具参数及错误脱敏。
+20 项单元测试使用模拟凭据和临时配置，覆盖认证隔离、美元换算与舍入、余额/周期解析、失败不显示为零、流式转发、取消信号、工具参数及错误脱敏。
 
 2026-10-05 的本地 Windows 实测读取到了 10 个模型及 5 小时、7 天周期。普通与流式聊天探测均返回上游 `HTTP 402`，因此**成功的真实聊天和 SSE 响应仍未验证**；相关转发行为已通过模拟响应测试。模型、套餐和 API 可能随上游变化。
 
@@ -123,7 +123,7 @@ bun test
 
 ## English
 
-Use your OpenDesign account in Magpie / OpenCode, discover available models, and read wallet balances, credits and Coding Plan windows in Magpie. Provider ID: `opendesign`.
+Use your OpenDesign account in Magpie / OpenCode, discover available models, and read the unified USD balance and Coding Plan windows in Magpie. Provider ID: `opendesign`.
 
 > This is an independently maintained **unofficial community plugin**. It is not affiliated with or endorsed by the OpenDesign or Magpie teams. Please report plugin issues in [this repository](https://github.com/ezdemo/opencode-opendesign-auth/issues).
 
@@ -132,7 +132,7 @@ Use your OpenDesign account in Magpie / OpenCode, discover available models, and
 - Import the local `profiles.prod` sign-in from `~/.amr/config.json` without modifying it.
 - Discover account models, context limits and input capabilities; omit disabled models.
 - Forward OpenAI Chat Completions requests, streaming responses and tool-call parameters.
-- Display wallet balance, subscription/recharge credits, and Coding Plan usage, remaining credits, limits and reset times in Magpie.
+- Display the unified USD balance and Coding Plan usage, remaining allowance and limits converted to USD, with reset times.
 - Embed OpenDesign's website PNG as the Magpie provider icon, with no icon download needed at load time.
 
 ### Install and sign in
@@ -192,17 +192,17 @@ On Windows, the plugin looks for `%LOCALAPPDATA%/Programs/Open Design/resources/
 | Models | `GET https://amr-link.open-design.ai/v1/models` | `runtimeKey` |
 | Inference | `POST https://amr-link.open-design.ai/v1/chat/completions` | `runtimeKey`; `model`, `messages`, `stream` |
 | Wallet | `GET https://amr-api.open-design.ai/api/v1/wallet/balance` | `controlKey`; `balanceUsd` |
-| Billing | `GET https://amr-api.open-design.ai/api/v1/billing/summary` | `controlKey`; `membershipTier`, `subscriptionStatus`, `balances` |
+| Billing | `GET https://amr-api.open-design.ai/api/v1/billing/summary` | `controlKey`; `membershipTier`, `subscriptionStatus`, `creditsPerUsd` |
 | Period limits | `vela billing preflight --workspace-id <id> --format json` | Local CLI sign-in; `codingPlan.windows[]` |
 
 Both API keys use `Authorization: Bearer <key>`, with runtime and account-query responsibilities kept separate.
 
-**Wallet and credits are balances, not percentages.** Only actual Coding Plan periods become quota windows. For example:
+**The balance row shows only the unified USD balance, without subscription/recharge breakdowns.** Coding Plan usage, limits and remaining credits are converted to USD using the billing API's `creditsPerUsd`. Missing or invalid rates produce an explicit error rather than a guessed conversion. Amounts show at least two decimals and up to four when needed. Only actual periods become percentage windows. For example, at 10,000 credits per USD:
 
 | Period | Used / limit | Remaining | Remaining percentage |
 | --- | --- | --- | --- |
-| 5 hours | 0 / 50,000 credits | 50,000 credits | 100% |
-| 7 days | 150,445 / 150,000 credits | 0 credits | 0% |
+| 5 hours | $0.00 / $5.00 | $5.00 | 100% |
+| 7 days | $15.0445 / $15.00 | $0.00 | 0% |
 
 These are illustrative values, not a live account reading. Overspending retains usage above 100%; a zero wallet does not mean period allowance is exhausted. Failed queries, missing fields or a missing workspace never become synthetic zeros. Successful fields survive partial failures, although Magpie may display the error instead of period rows. Actual period windows participate in Magpie's quota decisions.
 
@@ -222,7 +222,7 @@ bun run check
 bun test
 ```
 
-18 unit tests use synthetic credentials and temporary config files. They cover credential separation, balance/period parsing, failures without invented zeros, streaming forwarding, cancellation, tool parameters and error redaction.
+20 unit tests use synthetic credentials and temporary config files. They cover credential separation, USD conversion and rounding, balance/period parsing, failures without invented zeros, streaming forwarding, cancellation, tool parameters and error redaction.
 
 A Windows installation was checked on 2026-10-05: model discovery returned 10 models and CLI quota returned 5-hour and 7-day windows. Both non-streaming and streaming inference probes returned upstream `HTTP 402`, so **successful live inference and SSE remain unverified**; forwarding behavior is covered by mocked responses. Upstream models, plans and APIs may change.
 

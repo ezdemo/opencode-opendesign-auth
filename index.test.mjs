@@ -9,6 +9,7 @@ const cfg = { profiles: { prod: { controlKey: a.metadata.controlKey, runtimeKey:
 const summary = {
   membershipTier: "go", subscriptionStatus: "active", subscriptionCancelAtPeriodEnd: false,
   subscriptionCurrentPeriodEnd: "2026-11-01T00:00:00Z",
+  creditsPerUsd: 10000,
   balances: { subscriptionCredits: "25000", rechargeCredits: "0" },
 }
 const fixture = {
@@ -91,7 +92,7 @@ test("balances never become fake 100%-remaining windows; a missing workspace is 
     seen.push(init.headers.Authorization); return accountFetch(url)
   } })
   expect(seen).toEqual([`Bearer ${a.metadata.controlKey}`, `Bearer ${a.metadata.controlKey}`])
-  expect(result.balance).toBe("$0.0000 · Subscription credits: 25000 · Recharge credits: 0")
+  expect(result.balance).toBe("$0.00")
   expect(result.plan).toBe("go (active)")
   expect(result.renew).toBe("auto")
   expect(result.until).toBe("2026-11-01T00:00:00.000Z")
@@ -100,11 +101,32 @@ test("balances never become fake 100%-remaining windows; a missing workspace is 
 })
 
 test("Coding Plan fixture from the live CLI preserves overspending, remaining and reset times", () => {
-  const ws = i.planWindows(fixture)
-  expect(ws[0]).toEqual({ name: "5 hours", used: 0, span: 18000, resetsAt: "2026-10-05T15:36:43.000Z", display: "0 / 50000 credits · 50000 remaining" })
+  const ws = i.planWindows(fixture, summary.creditsPerUsd)
+  expect(ws[0]).toEqual({ name: "5 hours", used: 0, span: 18000, resetsAt: "2026-10-05T15:36:43.000Z", display: "$0.00 / $5.00 · $5.00 remaining" })
   expect(ws[1].name).toBe("7 days")
   expect(ws[1].used).toBeGreaterThan(100)
-  expect(ws[1].display).toBe("150445 / 150000 credits · 0 remaining")
+  expect(ws[1].display).toBe("$15.0445 / $15.00 · $0.00 remaining")
+})
+
+test("USD conversion uses the vendor's current rate, including fractional credit amounts", () => {
+  const ws = i.planWindows(fixture, "20000")
+  expect(ws[0].display).toBe("$0.00 / $2.50 · $2.50 remaining")
+  expect(ws[1].display).toBe("$7.5223 / $7.50 · $0.00 remaining")
+  expect(ws[1].used).toBe(i.planWindows(fixture, 10000)[1].used)
+  expect(i.usd(0.0001)).toBe("$0.0001")
+})
+
+test("missing or invalid exchange rates never produce invented dollar windows", async () => {
+  for (const rate of [undefined, null, "", false, 0, -1, "invalid"]) {
+    const result = await i.usage(a, { workspaceId: "workspace-test" }, {
+      fetchImpl: async (url) => response(url.endsWith("/wallet/balance") ? { balanceUsd: "1.2345" } : { ...summary, creditsPerUsd: rate }),
+      readProfileImpl: async () => ({ controlKey: a.metadata.controlKey, runtimeKey: a.key }),
+      preflightImpl: async () => fixture,
+    })
+    expect(result.balance).toBe("$1.2345")
+    expect(result.windows).toBeUndefined()
+    expect(result.error).toContain("USD conversion unavailable")
+  }
 })
 
 test("preflight runs the CLI with separate arguments and a timeout, never a shell", async () => {
@@ -117,7 +139,7 @@ test("preflight runs the CLI with separate arguments and a timeout, never a shel
     expect(options.shell).toBeUndefined()
     return { stdout: JSON.stringify({ ...fixture, workspaceId: id }) }
   })
-  expect(result).toHaveLength(2)
+  expect(result.codingPlan.windows).toHaveLength(2)
 })
 
 test("CLI failure, invalid JSON, wrong workspace and missing fields never yield zero windows", async () => {
@@ -129,14 +151,14 @@ test("CLI failure, invalid JSON, wrong workspace and missing fields never yield 
   catch (e) { expect(e.message).not.toContain(a.key); expect(e.message).not.toContain(a.metadata.controlKey) }
   for (const value of [null, "", false, "bad", -1]) {
     const b = structuredClone(fixture); b.codingPlan.windows[0].usedCredits = value
-    expect(() => i.planWindows(b)).toThrow("incomplete")
+    expect(() => i.planWindows(b, summary.creditsPerUsd)).toThrow("incomplete")
   }
 })
 
 test("account scope must still match local prod before invoking the CLI", async () => {
   let calls = 0
   const options = { workspaceId: "workspace-test" }
-  const deps = { fetchImpl: accountFetch, readProfileImpl: async () => ({ controlKey: a.metadata.controlKey, runtimeKey: a.key }), preflightImpl: async () => { calls++; return i.planWindows(fixture) } }
+  const deps = { fetchImpl: accountFetch, readProfileImpl: async () => ({ controlKey: a.metadata.controlKey, runtimeKey: a.key }), preflightImpl: async () => { calls++; return fixture } }
   const result = await i.usage(a, options, deps)
   expect(calls).toBe(1); expect(result.windows).toHaveLength(2)
   expect(result.error).toBeUndefined()
@@ -144,16 +166,16 @@ test("account scope must still match local prod before invoking the CLI", async 
   expect(result.windows.every(w => Number.isFinite(w.used) && !w.aside)).toBe(true)
   const changed = await i.usage(a, options, { ...deps, readProfileImpl: async () => ({ controlKey: "different", runtimeKey: a.key }) })
   expect(calls).toBe(1); expect(changed.error).toContain("local prod account changed")
-  expect(changed.balance).toBe("$0.0000 · Subscription credits: 25000 · Recharge credits: 0")
+  expect(changed.balance).toBe("$0.00")
 })
 
 test("wallet failure preserves successful billing and CLI data and does not expire inference auth", async () => {
   const result = await i.usage(a, { workspaceId: "workspace-test" }, {
     fetchImpl: async (url) => url.endsWith("/wallet/balance") ? response({ error: a.metadata.controlKey }, 401) : response(summary),
     readProfileImpl: async () => ({ controlKey: a.metadata.controlKey, runtimeKey: a.key }),
-    preflightImpl: async () => i.planWindows(fixture),
+    preflightImpl: async () => fixture,
   })
-  expect(result.balance).toBe("Subscription credits: 25000 · Recharge credits: 0"); expect(result.plan).toBe("go (active)")
+  expect(result.balance).toBeUndefined(); expect(result.plan).toBe("go (active)")
   expect(result.windows).toHaveLength(2)
   expect(result.error).toContain("HTTP 401"); expect(result.signIn).toBe("kept")
   expect(JSON.stringify(result)).not.toContain(a.metadata.controlKey)
