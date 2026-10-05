@@ -20,7 +20,7 @@
 - 动态获取账号可用的模型，读取上下文长度与输入能力，过滤禁用模型。
 - 使用 OpenAI Chat Completions 协议，转发普通请求、流式请求与工具调用参数。
 - 在 Magpie 中分别查看钱包、订阅积分、充值积分及 Coding Plan 周期的已用、剩余、上限和重置时间。
-- 使用 OpenDesign 官网图标作为 Magpie 的提供商图标。
+- 将 OpenDesign 官网 PNG 图标内嵌到插件中，作为 Magpie 提供商图标，加载时无需下载图标。
 
 ### 安装与登录
 
@@ -133,7 +133,7 @@ Use your OpenDesign account in Magpie / OpenCode, discover available models, and
 - Discover account models, context limits and input capabilities; omit disabled models.
 - Forward OpenAI Chat Completions requests, streaming responses and tool-call parameters.
 - Display wallet balance, subscription/recharge credits, and Coding Plan usage, remaining credits, limits and reset times in Magpie.
-- Use OpenDesign's website icon as the Magpie provider icon.
+- Embed OpenDesign's website PNG as the Magpie provider icon, with no icon download needed at load time.
 
 ### Install and sign in
 
