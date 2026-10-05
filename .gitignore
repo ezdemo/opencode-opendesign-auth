@@ -1,0 +1,8 @@
+node_modules/
+.sandbox/
+*.log
+*.tgz
+.env
+.env.*
+config.json
+plugin-auth.json

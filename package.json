@@ -1,0 +1,33 @@
+{
+  "name": "opencode-opendesign-auth",
+  "version": "0.1.0",
+  "description": "OpenDesign models, wallet, credits and Coding Plan in OpenCode and magpie",
+  "type": "module",
+  "main": "./index.mjs",
+  "exports": "./index.mjs",
+  "files": [
+    "index.mjs",
+    "README.md"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "magpie",
+    "opendesign",
+    "auth",
+    "provider"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ezdemo/opencode-opendesign-auth.git"
+  },
+  "homepage": "https://github.com/ezdemo/opencode-opendesign-auth#readme",
+  "bugs": {
+    "url": "https://github.com/ezdemo/opencode-opendesign-auth/issues"
+  },
+  "scripts": {
+    "test": "bun test",
+    "check": "node --check index.mjs"
+  }
+}
