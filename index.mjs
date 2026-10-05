@@ -8,6 +8,7 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 
 const ID = "opendesign"
+const ICON = "https://open-design.ai/apple-touch-icon.png"
 const API = "https://amr-api.open-design.ai/api/v1"
 const BASE = "https://amr-link.open-design.ai/v1"
 const NPM = "@ai-sdk/openai-compatible"
@@ -233,6 +234,7 @@ export async function OpenDesignAuthPlugin(_input, options = {}) {
     },
     auth: {
       provider: ID,
+      icon: ICON,
       methods: [{
         type: "oauth", label: "Import OpenDesign local prod sign-in",
         prompts: [{ type: "text", key: "workspaceId", message: "Workspace ID for Coding Plan (optional; leave empty to skip)", placeholder: "workspace ID" }],

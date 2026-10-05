@@ -1,7 +1,7 @@
 {
   "name": "opencode-opendesign-auth",
-  "version": "0.1.0",
-  "description": "OpenDesign models, wallet, credits and Coding Plan in OpenCode and magpie",
+  "version": "0.1.1",
+  "description": "Unofficial community OpenDesign provider plugin for Magpie and OpenCode",
   "type": "module",
   "main": "./index.mjs",
   "exports": "./index.mjs",
@@ -18,6 +18,9 @@
     "provider"
   ],
   "license": "MIT",
+  "magpie": {
+    "icon": "https://open-design.ai/apple-touch-icon.png"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ezdemo/opencode-opendesign-auth.git"
